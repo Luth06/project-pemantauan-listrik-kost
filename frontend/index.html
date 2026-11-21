@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Energy Monitoring Kos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6">
+  <div class="max-w-5xl mx-auto">
+    <header class="flex justify-between items-center mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-400">Smart Energy Kos</h1>
+        <p class="text-sm text-slate-400">Pemantauan Daya & Estimasi Biaya Real-Time</p>
+      </div>
+      <span id="ws-status" class="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-300">Menghubungkan...</span>
+    </header>
+
+    <div id="rooms-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:8000";
+    const WS_URL = "ws://localhost:8000/ws/kamar/all";
+    const rooms = {};
+
+    function renderRooms() {
+      const grid = document.getElementById("rooms-grid");
+      grid.innerHTML = Object.values(rooms).map(r => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow">
+          <div class="flex justify-between items-center mb-3">
+            <h2 class="font-semibold text-lg">${r.nama || r.kamar_id}</h2>
+            <span class="text-xs px-2 py-1 rounded ${r.status_online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+              ${r.status_online ? 'ONLINE' : 'OFFLINE'}
+            </span>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-center my-4">
+            <div class="bg-slate-800/60 p-3 rounded-lg">
+              <div class="text-xs text-slate-400">Daya</div>
+              <div class="text-xl font-bold text-amber-400">${(r.p ?? 0).toFixed(1)} W</div>
+            </div>
+            <div class="bg-slate-800/60 p-3 rounded-lg">
+              <div class="text-xs text-slate-400">Tegangan</div>
+              <div class="text-xl font-bold text-sky-400">${(r.v ?? 0).toFixed(1)} V</div>
+            </div>
+            <div class="bg-slate-800/60 p-3 rounded-lg">
+              <div class="text-xs text-slate-400">Total kWh</div>
+              <div class="text-xl font-bold text-emerald-400">${(r.e_kwh ?? 0).toFixed(3)}</div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function init() {
+      const res = await fetch(`${API_BASE}/kamar`);
+      const list = await res.json();
+      list.forEach(k => rooms[k.id] = { ...k, kamar_id: k.id });
+      renderRooms();
+
+      const ws = new WebSocket(WS_URL);
+      ws.onopen = () => {
+        const el = document.getElementById("ws-status");
+        el.textContent = "Terhubung (Real-Time)";
+        el.className = "px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-300";
+      };
+      ws.onmessage = (ev) => {
+        const d = JSON.parse(ev.data);
+        rooms[d.kamar_id] = { ...(rooms[d.kamar_id] || {}), ...d, status_online: true };
+        renderRooms();
+      };
+    }
+    init();
+  </script>
+</body>
+</html>
